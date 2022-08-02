@@ -2,31 +2,18 @@ from aiogram import Bot, Dispatcher, executor, types
 from loader import dp, bot
 import startHandler
 import challangeHandler
+import acceptChallengeHandler
 import json
 
+
 @dp.callback_query_handler(lambda callback_query: True)
-async def allCallbackQueries(callback_query: types.CallbackQuery):
-    await bot.answer_callback_query(callback_query.id)
-    exploded = callback_query.data.split('=')
-    choice = exploded[0]
-    jsonData = json.loads(exploded[1])
-    print(choice)
-    print(jsonData)
-    text = 'Пользователь не отвечает'
-    textToSender = ''
-    if choice == 'a':
-        text = 'Вызов принят'
-        textToSender = 'Наконец-то достойный противник'
-    if choice == 'd':
-        text = 'Он признал себя ссыклом'
-        textToSender = 'Достаточно крысиный поступок'
-    await bot.send_message(
-            jsonData['f'],
-            text)
-    await bot.edit_message_text(textToSender,
-                          callback_query.message.chat.id,
-                          callback_query.message.message_id)
-#     TODO query to server about start game
+async def callbacksHandler(callback_query: types.CallbackQuery):
+    callback_data = callback_query.data
+    exploded = callback_data.split('=')
+    cmd = exploded[0]
+    data = exploded[1]
+    if cmd == 'acpt':
+        await acceptChallengeHandler.acceptChallengeHandler(callback_query, data)
 
 
 if __name__ == "__main__":
