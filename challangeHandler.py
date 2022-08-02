@@ -9,7 +9,9 @@ import json
 from acceptChallengeHandler import AcceptChallenge
 from websockets import connect
 
+
 class GameSettings(StatesGroup):
+    templateChoose = State()
     side = State()
     isSideChanged = State()
     chooseGamer = State()
@@ -18,6 +20,7 @@ class GameSettings(StatesGroup):
 
 @dp.message_handler(commands="challenge")
 async def toChallenge(message: types.Message):
+    # Проверка существующего пользователя
     req = requests.post(HOST + '/api/bot/checkUser', {'chat_id': message.chat.id})
     if req.status_code == 200:
         data = req.json()
@@ -31,18 +34,27 @@ async def toChallenge(message: types.Message):
     req = requests.post(HOST + '/api/bot/getGameSettings', {'chat_id': message.chat.id})
     if req.status_code == 200:
         data = req.json()
-        if data['data'] is True:
-            await GameSettings.chooseGamer.set()
-            await chooseGamer(message)
-        else:
+        if data['data'] is False:
             inlineKb = InlineKeyboardMarkup(row_width=2)
             pvpBtn = InlineKeyboardButton('PvP', callback_data='pvp')
             # tvtBtn = InlineKeyboardButton('TvT', callback_data='t')
             inlineKb.add(pvpBtn)
             await GameSettings.side.set()
-            await message.answer('Выберите режим игры', reply_markup=inlineKb)
+            await message.answer('Выбери режим игры', reply_markup=inlineKb)
+        else:
+            inlineKb = keyboardBuilder(data['settings'])
+            await GameSettings.templateChoose.set()
+            await message.answer('Выбери шаблон игры', reply_markup=inlineKb)
     else:
         await message.answer('Сервер не отвечает')
+        return
+
+
+@dp.callback_query_handler(lambda callback_query: True, state=GameSettings.templateChoose)
+async def onChooseTemplate(callback_query: types.CallbackQuery, state: FSMContext):
+    await state.update_data(t_id=callback_query.data)
+    await GameSettings.chooseGamer.set()
+    await chooseGamer(callback_query.message, state, True)
 
 
 @dp.callback_query_handler(lambda callback_query: True, state=GameSettings.side)
@@ -79,21 +91,27 @@ async def setSideChanged(callback_query: types.CallbackQuery, state: FSMContext)
 async def chooseGamerHandler(callback_query: types.CallbackQuery, state: FSMContext):
     await bot.answer_callback_query(callback_query.id)
     await state.update_data(change=callback_query.data)
-    await saveGameSettingTemplate(callback_query.message, state)
+    gameSettings = await state.get_data()
+    templateID = saveGameSettingTemplate(callback_query.message, gameSettings)
+    if templateID is False:
+        await state.finish()
+        await bot.edit_message_text('Что то пошло не так',
+                                    callback_query.message.chat.id,
+                                    callback_query.message.message_id)
+        return
+    await state.update_data(t_id=templateID)
     await chooseGamer(callback_query.message, state, True)
 
 
-async def saveGameSettingTemplate(message, state):
+def saveGameSettingTemplate(message, gameSettings):
     url = HOST + '/api/bot/saveGameSettings'
-    gameSettings = await state.get_data()
     gameSettings['chat_id'] = message.chat.id
     req = requests.post(url, gameSettings)
-    # if req.status_code == 200:
-    #     data = req.json()
-    #     if data['data'] is True:
-    #         await bot.send_message(message.chat.id, 'Настройки сохранены')
-    #         return
-    # await bot.send_message(message.chat.id, 'Что то пошло не так: Настройки не сохранились')
+    if req.status_code == 200:
+        jsonData = req.json()
+        if jsonData['data'] is True:
+            return jsonData['id']
+        return False
 
 
 async def chooseGamer(message, state=None, messageEdited=False):
@@ -118,7 +136,7 @@ async def chooseGamer(message, state=None, messageEdited=False):
             inlineKb.add(btn)
         await GameSettings.next()
         if messageEdited:
-            await bot.edit_message_text('Вибери соперника',
+            await bot.edit_message_text('Выбери соперника',
                                         message.chat.id,
                                         message.message_id,
                                         reply_markup=inlineKb)
@@ -140,12 +158,13 @@ async def chooseGamer(message, state=None, messageEdited=False):
 @dp.callback_query_handler(lambda callback_query: True, state=GameSettings.finishState)
 async def requestToGamer(callback_query: types.CallbackQuery, state: FSMContext):
     await bot.answer_callback_query(callback_query.id)
+    stateData = await state.get_data()
     await state.finish()
-    await sendToRecipient(callback_query)
+    await sendToRecipient(callback_query, stateData['t_id'])
 
 
-async def sendToRecipient(callback_query):
-    req = requests.post(HOST + '/api/bot/getGameSettings', {'chat_id': callback_query.message.chat.id})
+async def sendToRecipient(callback_query, templateID):
+    req = requests.post(HOST + '/api/bot/getGameSettingsById', {'template_id': templateID})
     if req.status_code == 200:
         data = req.json()
         if data['data'] is True:
@@ -166,10 +185,10 @@ async def sendToRecipient(callback_query):
             text = 'Пользователь ' + fromUserName + ' рискнул бросить тебе вызов: \n'
             text += modeGame + sideGame + sideChange
 
-            jsonData = {'f': callback_query.message.chat.id, 't_id': settings['id'], 'd': True}
-            acceptJson = 'acpt=' + json.dumps(jsonData)
+            jsonData = {'f': callback_query.message.chat.id, 't_id': settings['id'], 'd': True, 'cmd': 'acpt'}
+            acceptJson = json.dumps(jsonData)
             jsonData['d'] = False
-            declineJson = 'acpt=' + json.dumps(jsonData)
+            declineJson = json.dumps(jsonData)
             inlineKb = InlineKeyboardMarkup(row_width=2)
             acceptBtn = InlineKeyboardButton('Принять', callback_data=acceptJson)
             declineBtn = InlineKeyboardButton('Я ссыкло', callback_data=declineJson)
@@ -186,3 +205,23 @@ async def sendToRecipient(callback_query):
     await bot.edit_message_text('Что то пошло не так',
                                 callback_query.message.chat.id,
                                 callback_query.message.message_id)
+
+
+def keyboardBuilder(settings):
+    inlineKb = InlineKeyboardMarkup(row_width=1)
+    for item in settings:
+        if item['mode'] == 'pvp':
+            textBtn = 'PvP.'
+        else:
+            textBtn = 'TvT.'
+        if item['side'] == 'red':
+            textBtn += ' За красных.'
+        else:
+            textBtn += ' За синих.'
+        if item['side_change'] == 1:
+            textBtn += ' Со сменой сторон.'
+        else:
+            textBtn += ' Без смены сторон.'
+        inlineBtn = InlineKeyboardButton(textBtn, callback_data=item['id'])
+        inlineKb.add(inlineBtn)
+    return inlineKb

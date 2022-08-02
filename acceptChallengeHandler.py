@@ -15,9 +15,8 @@ class AcceptChallenge(StatesGroup):
     start = State()
 
 
-async def acceptChallengeHandler(callback_query: types.CallbackQuery, callback_data):
+async def acceptChallengeHandler(callback_query: types.CallbackQuery, jsonData):
     await bot.answer_callback_query(callback_query.id)
-    jsonData = json.loads(callback_data)
     inlineKb = None
     if jsonData['d'] is True:
         text = 'Вызов принят'
