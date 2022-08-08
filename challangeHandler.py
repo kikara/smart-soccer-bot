@@ -31,6 +31,16 @@ async def toChallenge(message: types.Message):
         await message.answer('Сервер не отвечает')
         return
 
+    req = requests.post(HOST + '/api/bot/isTableOccupied')
+    if req.status_code == 200:
+        data = req.json()
+        if data['data'] is False:
+            await message.answer('Стол занят, повторите попытку позже')
+            return
+    else:
+        await message.answer('Сервер не отвечает')
+        return
+
     req = requests.post(HOST + '/api/bot/getGameSettings', {'chat_id': message.chat.id})
     if req.status_code == 200:
         data = req.json()
