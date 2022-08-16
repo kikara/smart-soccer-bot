@@ -142,6 +142,8 @@ async def chooseGamer(message, state=None, messageEdited=False):
         for item in data:
             login = item.get('login')
             chat_id = item.get('chat_id')
+            if len(login) == 0 or len(chat_id) == 0:
+                continue
             btn = InlineKeyboardButton(login, callback_data=chat_id)
             inlineKb.add(btn)
         await GameSettings.next()
@@ -191,7 +193,7 @@ async def sendToRecipient(callback_query, templateID):
                 sideChange = 'Со сменой сторон \n'
             else:
                 sideChange = 'Без смены сторон \n'
-            fromUserName = callback_query.message.chat.first_name + ' ' + callback_query.message.chat.last_name
+            fromUserName = callback_query.message.chat.first_name
             text = 'Пользователь ' + fromUserName + ' рискнул бросить тебе вызов: \n'
             text += modeGame + sideGame + sideChange
 
