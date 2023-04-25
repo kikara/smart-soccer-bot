@@ -6,35 +6,48 @@ from websockets import connect
 import json
 
 
-async def acceptChallengeHandler(callback_query: types.CallbackQuery, jsonData):
-    inlineKb = None
-    if jsonData['d'] is True:
+async def acceptChallengeHandler(callback_query: types.CallbackQuery, json_data):
+    # inline_kb = None
+    if json_data['d'] is True:
+
         text = 'Вызов принят'
-        textToSender = 'Наконец-то достойный противник'
-        inlineKb = InlineKeyboardMarkup(row_width=1)
-        callbackData = {'cmd': 'start'}
-        jsonBtn = json.dumps(callbackData)
-        inlineBtn = InlineKeyboardButton('Старт', callback_data=jsonBtn)
-        inlineKb.add(inlineBtn)
-        jsonData['r'] = callback_query.message.chat.id
-        jsonData['cmd'] = 'prepare'
-        jsonData['t_id'] = jsonData['id']
-        await socketSend(jsonData)
+
+        text_to_sender = 'Наконец-то достойный противник'
+
+        # inline_kb = InlineKeyboardMarkup(row_width=1)
+        # callback_data = {'cmd': 'start'}
+
+        # json_btn = json.dumps(callback_data)
+        #
+        # inline_btn = InlineKeyboardButton('Старт', callback_data=json_btn)
+        #
+        # inline_kb.add(inline_btn)
+
+        json_data['r'] = callback_query.message.chat.id
+
+        json_data['cmd'] = 'prepare'
+
+        json_data['t_id'] = json_data['id']
+
+        await socketSend(json_data)
 
     else:
         text = 'Он признал себя ссыклом'
-        textToSender = 'Достаточно крысиный поступок'
-    await bot.send_message(jsonData['f'], text)
 
-    await bot.edit_message_text(textToSender,
+        text_to_sender = 'Достаточно крысиный поступок'
+
+    await bot.send_message(json_data['f'], text)
+
+    await bot.edit_message_text(text_to_sender,
                                 callback_query.message.chat.id,
-                                callback_query.message.message_id,
-                                reply_markup=inlineKb)
+                                callback_query.message.message_id)
 
 
-async def startGame(callback_query: types.CallbackQuery, jsonData):
-    socketData = {'cmd': 'start'}
-    await socketSend(socketData)
+async def startGame(callback_query: types.CallbackQuery, json_data):
+    socket_data = {'cmd': 'start'}
+
+    await socketSend(socket_data)
+
     await bot.edit_message_text('Игра началась',
                                 callback_query.message.chat.id,
                                 callback_query.message.message_id)
